@@ -1,0 +1,189 @@
+[
+  {
+    "package_name": "system_test_app",
+    "layer": "App",
+    "files": [
+      {
+        "file_name": "system_test_app.c",
+        "functions": [
+          {
+            "id": "main",
+            "calls": [
+              "bbb_led_set",
+              "bbb_nvram_write",
+              "bbb_nvram_read"
+            ],
+            "logs": [
+              "=== BẮT ĐẦU CHẠY ỨNG DỤNG KIỂM THỬ TỔNG HỢP ===",
+              "Gọi API bbb_led_set(1) để bật LED tại chân P9.12...",
+              "Gọi API bbb_nvram_write: Ghi '%s' vào offset 0x%02X...",
+              "Gọi API bbb_nvram_read: Đọc dữ liệu từ offset 0x%02X..."
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "package_name": "libbbb_led.so",
+    "layer": "Lib",
+    "files": [
+      {
+        "file_name": "bbb_led.c",
+        "functions": [
+          {
+            "id": "bbb_led_set_state",
+            "calls": [
+              "vfs:/sys/class/bbb_led/value:open",
+              "vfs:/sys/class/bbb_led/value:write"
+            ],
+            "logs": [
+              "Không thể mở device node của LED"
+            ]
+          },
+          {
+            "id": "bbb_led_on",
+            "calls": [
+              "bbb_led_set_state"
+            ],
+            "logs": []
+          },
+          {
+            "id": "bbb_led_off",
+            "calls": [
+              "bbb_led_set_state"
+            ],
+            "logs": []
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "package_name": "libbbb_nvram.so",
+    "layer": "Lib",
+    "files": [
+      {
+        "file_name": "bbb_nvram.c",
+        "functions": [
+          {
+            "id": "bbb_nvram_write",
+            "calls": [
+              "vfs:/dev/bbb_eeprom:open",
+              "vfs:/dev/bbb_eeprom:write"
+            ],
+            "logs": [
+              "Failed to open EEPROM device for writing"
+            ]
+          },
+          {
+            "id": "bbb_nvram_read",
+            "calls": [
+              "vfs:/dev/bbb_eeprom:open",
+              "vfs:/dev/bbb_eeprom:read"
+            ],
+            "logs": [
+              "Failed to open EEPROM device for reading"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "package_name": "bbb_eeprom.ko",
+    "layer": "Driver",
+    "files": [
+      {
+        "file_name": "bbb_eeprom_driver.c",
+        "functions": [
+          {
+            "id": "eeprom_read",
+            "calls": [
+              "i2c_smbus_read_byte_data"
+            ],
+            "logs": [
+              "Lỗi đọc từ EEPROM"
+            ]
+          },
+          {
+            "id": "eeprom_write",
+            "calls": [
+              "i2c_smbus_write_byte_data"
+            ],
+            "logs": [
+              "Lỗi ghi vào EEPROM"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "package_name": "bbb_led_driver.ko",
+    "layer": "Driver",
+    "files": [
+      {
+        "file_name": "bbb_led_driver.c",
+        "functions": [
+          {
+            "id": "value_show",
+            "calls": [
+              "gpiod_get_value"
+            ],
+            "logs": []
+          },
+          {
+            "id": "value_store",
+            "calls": [
+              "gpiod_set_value"
+            ],
+            "logs": []
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "package_name": "bbb_shared_lib.ko",
+    "layer": "Driver",
+    "files": [
+      {
+        "file_name": "bbb_shared_lib.c",
+        "functions": [
+          {
+            "id": "bbb_calculate_checksum",
+            "calls": [],
+            "logs": [
+              "Calculated checksum 0x%02x for %zu bytes"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "package_name": "sensor_manager_driver.ko",
+    "layer": "Driver",
+    "files": [
+      {
+        "file_name": "sensor_manager_driver.c",
+        "functions": [
+          {
+            "id": "sensor_manager_init",
+            "calls": [
+              "register_kprobe",
+              "unregister_kprobe",
+              "bbb_calculate_checksum"
+            ],
+            "logs": [
+              "Initializing (Dynamic Lookup Simulation)",
+              "Đã tìm thấy symbol 'bbb_calculate_checksum' tại: %p",
+              "Checksum kết quả (Dynamic Call) = 0x%02x"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]
