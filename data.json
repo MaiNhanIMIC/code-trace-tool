@@ -1,0 +1,136 @@
+[
+  {
+    "file_name": "source-code/app/system_test_app.c",
+    "line": 1,
+    "caller": "main",
+    "callees": [
+      "bbb_led_set",
+      "bbb_nvram_write",
+      "bbb_nvram_read"
+    ],
+    "logs": [
+      "=== BẮT ĐẦU CHẠY ỨNG DỤNG KIỂM THỬ TỔNG HỢP ===",
+      "Gọi API bbb_led_set(1) để bật LED tại chân P9.12...",
+      "Gọi API bbb_nvram_write: Ghi '%s' vào offset 0x%02X...",
+      "Gọi API bbb_nvram_read: Đọc dữ liệu từ offset 0x%02X..."
+    ]
+  },
+  {
+    "file_name": "source-code/lib/led-lib/bbb_led.c",
+    "line": 1,
+    "caller": "bbb_led_set_state",
+    "callees": [
+      "vfs:/sys/class/bbb_led/value:open",
+      "vfs:/sys/class/bbb_led/value:write"
+    ],
+    "logs": [
+      "Không thể mở device node của LED"
+    ]
+  },
+  {
+    "file_name": "source-code/lib/led-lib/bbb_led.c",
+    "line": 1,
+    "caller": "bbb_led_on",
+    "callees": [
+      "bbb_led_set_state"
+    ],
+    "logs": []
+  },
+  {
+    "file_name": "source-code/lib/led-lib/bbb_led.c",
+    "line": 1,
+    "caller": "bbb_led_off",
+    "callees": [
+      "bbb_led_set_state"
+    ],
+    "logs": []
+  },
+  {
+    "file_name": "source-code/lib/nvram-lib/bbb_nvram.c",
+    "line": 1,
+    "caller": "bbb_nvram_write",
+    "callees": [
+      "vfs:/dev/bbb_eeprom:open",
+      "vfs:/dev/bbb_eeprom:write"
+    ],
+    "logs": [
+      "Failed to open EEPROM device for writing"
+    ]
+  },
+  {
+    "file_name": "source-code/lib/nvram-lib/bbb_nvram.c",
+    "line": 1,
+    "caller": "bbb_nvram_read",
+    "callees": [
+      "vfs:/dev/bbb_eeprom:open",
+      "vfs:/dev/bbb_eeprom:read"
+    ],
+    "logs": [
+      "Failed to open EEPROM device for reading"
+    ]
+  },
+  {
+    "file_name": "source-code/driver/epprom-driver/bbb_eeprom_driver.c",
+    "line": 1,
+    "caller": "eeprom_read",
+    "callees": [
+      "i2c_smbus_read_byte_data"
+    ],
+    "logs": [
+      "Lỗi đọc từ EEPROM"
+    ]
+  },
+  {
+    "file_name": "source-code/driver/epprom-driver/bbb_eeprom_driver.c",
+    "line": 1,
+    "caller": "eeprom_write",
+    "callees": [
+      "i2c_smbus_write_byte_data"
+    ],
+    "logs": [
+      "Lỗi ghi vào EEPROM"
+    ]
+  },
+  {
+    "file_name": "source-code/driver/led-driver/bbb_led_driver.c",
+    "line": 1,
+    "caller": "value_show",
+    "callees": [
+      "gpiod_get_value"
+    ],
+    "logs": []
+  },
+  {
+    "file_name": "source-code/driver/led-driver/bbb_led_driver.c",
+    "line": 1,
+    "caller": "value_store",
+    "callees": [
+      "gpiod_set_value"
+    ],
+    "logs": []
+  },
+  {
+    "file_name": "source-code/driver/shared-lib-driver/bbb_shared_lib.c",
+    "line": 1,
+    "caller": "bbb_calculate_checksum",
+    "callees": [],
+    "logs": [
+      "Calculated checksum 0x%02x for %zu bytes"
+    ]
+  },
+  {
+    "file_name": "source-code/driver/sensor-manager-driver/sensor_manager_driver.c",
+    "line": 1,
+    "caller": "sensor_manager_init",
+    "callees": [
+      "register_kprobe",
+      "unregister_kprobe",
+      "bbb_calculate_checksum"
+    ],
+    "logs": [
+      "Initializing (Dynamic Lookup Simulation)",
+      "Đã tìm thấy symbol 'bbb_calculate_checksum' tại: %p",
+      "Checksum kết quả (Dynamic Call) = 0x%02x"
+    ]
+  }
+]
