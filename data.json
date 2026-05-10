@@ -131,6 +131,7 @@
       "Initializing (Dynamic Lookup Simulation)",
       "Đã tìm thấy symbol 'bbb_calculate_checksum' tại: %p",
       "Checksum kết quả (Dynamic Call) = 0x%02x"
+      
     ]
   }
 ]

@@ -1,241 +1,196 @@
 (function() {
     const vscode = acquireVsCodeApi();
-    const errorContainer = document.getElementById('cy');
+    const graphContainer = document.getElementById('3d-graph');
     const statusContainer = document.getElementById('status');
     const searchInput = document.getElementById('search-input');
     const nodeDataList = document.getElementById('node-list');
-    let cy;
+    const logContainer = document.getElementById('log-container');
+    
+    let Graph;
+    let highlightNodes = new Set();
+    let highlightLinks = new Set();
+    let hoverNode = null;
+    let clickTimeout = null;
+    let lastClickTime = 0;
 
     window.addEventListener('message', event => {
         const message = event.data;
-        switch (message.command) {
-            case 'setData':
-                renderGraph(message.data);
-                break;
+        if (message.command === 'setData') {
+            init3DGraph(message.data);
         }
     });
 
-    // Signal we are ready for data
     vscode.postMessage({ command: 'ready' });
 
-    function renderGraph(data) {
-        console.log('Received data:', data);
-        statusContainer.textContent = 'Click a node to view logs';
-
-        if (!data || !Array.isArray(data) || data.length === 0) {
-            errorContainer.innerHTML = '<div style="color: #666; padding: 20px;">No data to display.</div>';
+    function init3DGraph(data) {
+        const FG3D = window.ForceGraph3D || (window.default ? window.default : null);
+        
+        if (!FG3D) {
+            statusContainer.textContent = 'Error: 3D Library failed to initialize.';
             return;
         }
 
-        const elements = [];
+        statusContainer.textContent = '3D World Ready. Click to show paths, double-click to jump.';
+        
         const nodeMap = new Map();
+        const links = [];
 
-        try {
-            // Clear previous datalist
-            nodeDataList.innerHTML = '';
+        data.forEach(item => {
+            if (!item.caller) return;
+            if (!nodeMap.has(item.caller)) {
+                nodeMap.set(item.caller, {
+                    id: item.caller,
+                    name: item.caller,
+                    fileName: item.file_name,
+                    line: item.line,
+                    logs: item.logs || [],
+                    val: 10,
+                    neighbors: [],
+                    links: []
+                });
+            } else {
+                const n = nodeMap.get(item.caller);
+                n.fileName = item.file_name || n.fileName;
+                n.line = item.line || n.line;
+                n.logs = item.logs || n.logs;
+            }
 
-            data.forEach(item => {
-                if (!item.caller) return;
+            (item.callees || []).forEach(callee => {
+                if (!callee) return;
+                if (!nodeMap.has(callee)) {
+                    nodeMap.set(callee, { id: callee, name: callee, logs: [], val: 5, neighbors: [], links: [] });
+                }
+                const link = { source: item.caller, target: callee };
+                links.push(link);
                 
-                if (!nodeMap.has(item.caller)) {
-                    nodeMap.set(item.caller, {
-                        id: item.caller,
-                        label: item.caller,
-                        fileName: item.file_name,
-                        line: item.line,
-                        logs: item.logs || []
-                    });
-                    
-                    const option = document.createElement('option');
-                    option.value = item.caller;
-                    nodeDataList.appendChild(option);
-                } else {
-                    const node = nodeMap.get(item.caller);
-                    node.fileName = item.file_name || node.fileName;
-                    node.line = item.line || node.line;
-                    node.logs = item.logs || node.logs;
-                }
+                const nodeA = nodeMap.get(item.caller);
+                const nodeB = nodeMap.get(callee);
+                nodeA.neighbors.push(nodeB);
+                nodeB.neighbors.push(nodeA);
+                nodeA.links.push(link);
+                nodeB.links.push(link);
+            });
+        });
 
-                (item.callees || []).forEach(callee => {
-                    if (!callee) return;
-                    if (!nodeMap.has(callee)) {
-                        nodeMap.set(callee, {
-                            id: callee,
-                            label: callee,
-                            logs: []
-                        });
-                        const option = document.createElement('option');
-                        option.value = callee;
-                        nodeDataList.appendChild(option);
+        const graphData = { nodes: Array.from(nodeMap.values()), links: links };
+
+        nodeDataList.innerHTML = '';
+        graphData.nodes.forEach(n => {
+            const opt = document.createElement('option');
+            opt.value = n.id;
+            nodeDataList.appendChild(opt);
+        });
+
+        Graph = FG3D()(graphContainer)
+            .graphData(graphData)
+            .nodeLabel(n => `
+                <div style="background:rgba(0,0,0,0.85);padding:8px;border:1px solid #f1c40f;border-radius:4px;color:white;pointer-events:none;">
+                    <b style="color:#f1c40f;">${n.name}</b><br>
+                    <small style="color:#aaa;">File: ${n.fileName || '??'}</small><br>
+                    <small style="color:#aaa;">Line: ${n.line || '?'}</small>
+                </div>
+            `)
+            .nodeColor(n => {
+                if (highlightNodes.size > 0) {
+                    if (highlightNodes.has(n)) return n === hoverNode ? '#ff0000' : '#f1c40f';
+                    return 'rgba(100, 100, 100, 0.2)';
+                }
+                return '#007acc';
+            })
+            .linkWidth(link => highlightLinks.has(link) ? 4 : 1)
+            .linkColor(link => {
+                if (highlightLinks.size > 0) {
+                    return highlightLinks.has(link) ? '#f1c40f' : 'rgba(100, 100, 100, 0.1)';
+                }
+                return 'rgba(255, 255, 255, 0.2)';
+            })
+            .linkDirectionalArrowLength(link => highlightLinks.has(link) ? 6 : 3)
+            .linkDirectionalArrowRelPos(1)
+            .linkDirectionalParticles(link => highlightLinks.has(link) ? 4 : 0)
+            .linkDirectionalParticleWidth(4)
+            .onNodeHover(node => {
+                hoverNode = node;
+                graphContainer.style.cursor = node ? 'pointer' : null;
+                Graph.nodeColor(Graph.nodeColor());
+            })
+            .onNodeClick(node => {
+                const now = Date.now();
+                if (now - lastClickTime < 300) {
+                    if (clickTimeout) {
+                        clearTimeout(clickTimeout);
+                        clickTimeout = null;
                     }
-                    elements.push({
-                        data: {
-                            id: 'edge_' + Math.random().toString(36).substr(2, 9),
-                            source: item.caller,
-                            target: callee
+                    if (node && node.fileName) {
+                        vscode.postMessage({ command: 'jumpToCode', fileName: node.fileName, line: parseInt(node.line) });
+                    }
+                } else {
+                    clickTimeout = setTimeout(() => {
+                        handleSingleClick(node);
+                        clickTimeout = null;
+                    }, 300);
+                }
+                lastClickTime = now;
+            })
+            .onBackgroundClick(() => {
+                highlightNodes.clear();
+                highlightLinks.clear();
+                Graph.nodeColor(Graph.nodeColor());
+                Graph.linkWidth(Graph.linkWidth());
+                Graph.linkDirectionalParticles(0);
+                logContainer.innerHTML = '<div style="color:#444;font-style:italic;">Select a node to see logs</div>';
+            });
+
+        function handleSingleClick(node) {
+            highlightNodes.clear();
+            highlightLinks.clear();
+
+            if (node) {
+                const queue = [node];
+                highlightNodes.add(node);
+                let i = 0;
+                while(i < queue.length) {
+                    const n = queue[i++];
+                    (n.neighbors || []).forEach(neighbor => {
+                        if (!highlightNodes.has(neighbor)) {
+                            highlightNodes.add(neighbor);
+                            queue.push(neighbor);
                         }
                     });
-                });
-            });
-
-            nodeMap.forEach(nodeData => {
-                elements.push({ data: nodeData });
-            });
-
-            if (typeof cytoscape === 'undefined') {
-                errorContainer.innerHTML = '<div style="color: #e51400; padding: 20px;">Error: Cytoscape not loaded.</div>';
-                return;
+                    (n.links || []).forEach(link => highlightLinks.add(link));
+                }
+                focusNode(node);
             }
 
-            cy = cytoscape({
-                container: errorContainer,
-                elements: elements,
-                style: [
-                    {
-                        selector: 'node',
-                        style: {
-                            'background-color': '#007acc',
-                            'label': 'data(label)',
-                            'color': '#cccccc',
-                            'text-valign': 'bottom',
-                            'text-halign': 'center',
-                            'text-margin-y': 8,
-                            'font-size': '11px',
-                            'width': '30px',
-                            'height': '30px',
-                            'shape': 'ellipse',
-                            'border-width': 2,
-                            'border-color': '#005a9e'
-                        }
-                    },
-                    {
-                        selector: 'edge',
-                        style: {
-                            'width': 2,
-                            'line-color': '#555',
-                            'target-arrow-color': '#555',
-                            'target-arrow-shape': 'triangle',
-                            'curve-style': 'bezier',
-                            'opacity': 0.6
-                        }
-                    },
-                    {
-                        selector: 'node.highlighted',
-                        style: {
-                            'background-color': '#f1c40f',
-                            'border-color': '#d4ac0d',
-                            'border-width': 4,
-                            'width': '35px',
-                            'height': '35px',
-                            'opacity': 1,
-                            'z-index': 999
-                        }
-                    },
-                    {
-                        selector: 'edge.highlighted',
-                        style: {
-                            'line-color': '#f1c40f',
-                            'target-arrow-color': '#f1c40f',
-                            'width': 4,
-                            'opacity': 1,
-                            'z-index': 998
-                        }
-                    },
-                    {
-                        selector: '.dimmed',
-                        style: {
-                            'opacity': 0.1
-                        }
-                    }
-                ],
-                layout: {
-                    name: 'cose',
-                    padding: 40
-                }
-            });
-
-            const tooltip = document.getElementById('tooltip');
-            const logContainer = document.getElementById('log-container');
-
-            cy.on('mouseover', 'node', function(evt) {
-                const node = evt.target;
-                if (node.data('fileName')) {
-                    tooltip.innerHTML = '<b>' + node.data('label') + '</b><br>File: ' + node.data('fileName') + '<br>Line: ' + node.data('line');
-                    tooltip.style.display = 'block';
-                }
-            });
-
-            cy.on('mousemove', function(evt) {
-                tooltip.style.left = (evt.renderedPosition.x + 20) + 'px';
-                tooltip.style.top = (evt.renderedPosition.y + 20) + 'px';
-            });
-
-            cy.on('mouseout', 'node', function() {
-                tooltip.style.display = 'none';
-            });
-
-            function highlightNode(node) {
-                cy.elements().removeClass('highlighted dimmed');
-                const path = node.predecessors().union(node.successors()).union(node);
-                cy.elements().not(path).addClass('dimmed');
-                path.addClass('highlighted');
-                cy.animate({
-                    center: { eles: node },
-                    zoom: 1.2,
-                    duration: 500
-                });
-
-                const logs = node.data('logs');
-                logContainer.innerHTML = '<div style="font-weight: bold; color: #f1c40f;">Logs for ' + node.data('label') + ':</div>';
-                if (logs && logs.length > 0) {
-                    logs.forEach(log => {
-                        const div = document.createElement('div');
-                        div.className = 'log-entry';
-                        div.textContent = log;
-                        logContainer.appendChild(div);
-                    });
-                } else {
-                    const div = document.createElement('div');
-                    div.style.cssText = 'font-style: italic; color: #666;';
-                    div.textContent = 'No logs';
-                    logContainer.appendChild(div);
-                }
-            }
-
-            cy.on('tap', 'node', function(evt) {
-                highlightNode(evt.target);
-            });
-
-            // Search functionality
-            searchInput.addEventListener('input', () => {
-                const val = searchInput.value;
-                const node = cy.nodes().filter(n => n.data('label') === val);
-                if (node.length > 0) {
-                    highlightNode(node[0]);
-                }
-            });
-
-            cy.on('dbltap', 'node', function(evt) {
-                const node = evt.target;
-                if (node.data('fileName')) {
-                    vscode.postMessage({
-                        command: 'jumpToCode',
-                        fileName: node.data('fileName'),
-                        line: parseInt(node.data('line'))
-                    });
-                }
-            });
-
-            cy.on('tap', function(evt) {
-                if (evt.target === cy) {
-                    cy.elements().removeClass('highlighted dimmed');
-                    logContainer.innerHTML = '<div style="font-style: italic; color: #666;">Select a node</div>';
-                    searchInput.value = '';
-                }
-            });
-
-        } catch (e) {
-            errorContainer.innerHTML = '<div style="color: #e51400; padding: 20px;">Render Error: ' + e.message + '</div>';
+            Graph.nodeColor(Graph.nodeColor());
+            Graph.linkWidth(Graph.linkWidth());
+            Graph.linkDirectionalParticles(Graph.linkDirectionalParticles());
         }
+
+        function focusNode(node) {
+            if (!node) return;
+            const dist = 120;
+            const distRatio = 1 + dist/Math.hypot(node.x || 1, node.y || 1, node.z || 1);
+            Graph.cameraPosition({ x: (node.x||0) * distRatio, y: (node.y||0) * distRatio, z: (node.z||0) * distRatio }, node, 1500);
+
+            logContainer.innerHTML = '<div style="margin-bottom:15px;">' +
+                '<b style="color:#f1c40f;font-size:18px;">' + node.name + '</b><br>' +
+                '<span style="color:#aaa;font-size:12px;">File: ' + (node.fileName||'Unknown') + '</span><br>' +
+                '<span style="color:#aaa;font-size:12px;">Line: ' + (node.line||'?') + '</span></div>';
+
+            if (node.logs && node.logs.length > 0) {
+                node.logs.forEach(l => {
+                    const d = document.createElement('div');
+                    d.className = 'log-entry'; d.textContent = l;
+                    logContainer.appendChild(d);
+                });
+            } else {
+                logContainer.innerHTML += '<div style="color:#444;font-style:italic;">No logs</div>';
+            }
+        }
+
+        searchInput.addEventListener('input', () => {
+            const n = graphData.nodes.find(x => x.id === searchInput.value);
+            if (n) handleSingleClick(n);
+        });
     }
 })();
